@@ -7,7 +7,7 @@ var RouteHandler = Router.RouteHandler;
 
 var Actions = Reflux.createActions([
     'viewInfo',
-    'loadConnection',
+    'loadConnections',
     'search',
     'loadKey',
     'loadRelatedKeyInfo',
@@ -108,14 +108,16 @@ var InfoStore = Reflux.createStore({
 
 var ConnectionStore = Reflux.createStore({
     init: function () {
-        this.listenTo(Actions.loadConnection, this.loadConnection);
-        this.connection = null;
+        this.listenTo(Actions.loadConnections, this.loadConnections);
+        this.connections = null;
     },
-    loadConnection: function () {
+    loadConnections: function () {
         var $this = this;
-        Redis.getConnection()
+        Redis.getConnections()
             .done(function (r) {
-                $this.trigger($this.connection = r);
+                var activeConnection = r.connections[0];
+                $this.connections = r.connections;
+                $this.trigger(activeConnection);
             });
     }
 });

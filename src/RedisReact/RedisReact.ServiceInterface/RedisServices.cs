@@ -209,7 +209,8 @@ return cjson.encode(cursorAttrs)";
 
         private bool TryConnect(ChangeConnection connection, bool ssl, bool password, out string connString)
         {
-            connString = GetConnectionString(connection, password ? Redis.Password : null);
+            var settings = SharedUtils.GetAppSettings();
+            connString = GetConnectionString(connection, password ? settings.GetString("password") : null);
             if (ssl) {
                 connString += "&ssl=true";
             }

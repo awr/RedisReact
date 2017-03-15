@@ -6,7 +6,7 @@
         return { connections: ConnectionStore.connections, connection: null, successMessage: null };
     },
     onConnection: function () {
-        this.setState({ connections: ConnectionStore.connections });
+        this.setState({ connections: ConnectionStore.connections, connection: ConnectionStore.connections[0] });
     },
     selectText: function (e) {
         var target = e.target;
@@ -14,100 +14,124 @@
             target.select();
         }, 0);
     },
-    onChange: function (e) {
-        var oldIndex = this.state.index || 0;
-        var index = e.target.parentElement.id.split('_')[1];
-        var conn = (index != oldIndex) ? {} : this.state.connection || {};
+    onChange: function(e) {
+        var conn = this.state.connection || {};
         conn[e.target.name] = e.target.value;
-        this.setState({ connection: conn, index: index });
+        this.setState({ connection: conn });
     },
-    onSubmit: function (e) {
+    onClear: function(e) {
         e.preventDefault();
-        var index = e.target.parentElement.id.split('_')[1];
+        this.setState({ connection: null });
+    },
+    onSubmit: function(e) {
+        e.preventDefault();
 
         this.setState({ successMessage: null });
 
         var $this = this;
         $(e.target).ajaxSubmit({
-            onSubmitDisable: $("#btnConnect"),
-            success: function () {
-                $this.setState({ successMessage: index === 0 ? "Connection was added" : "Connection was updated" });
+            onSubmitDisable: $("#btnSave"),
+            success: function() {
+                $this.setState({ successMessage: "Connections updated" });
                 Actions.loadConnections();
             }
         });
     },
-    //onAdd: function (e) {
-    //    e.preventDefault();
-    //    this.setState({ successMessage: null });
+    onConnect: function (e, conn) {
+        e.preventDefault();
 
-    //    var $this = this;
-    //    $(e.target).ajaxSubmit({
-    //        onSubmitDisable: $("#btnConnect"),
-    //        success: function () {
-    //            $this.setState({ successMessage: "Connection was added" });
-    //            Actions.loadConnections();
-    //        }
-    //    });
-
-    //},
-    renderConnection: function(i) {
         var $this = this;
-        var connection = this.state.connections[i] || this.state.connection;
-
-        var color = "#000";
-        var Buttons = [];
-        if (!this.state.connections[i]) {
-            Buttons.push(<button id="btnConnect" className="btn btn-default btn-primary">Add</button>);
-        } else {
-            if (!connection.isActive) {
-                Buttons.push(<button id="btnConnect" className="btn btn-default btn-primary">Update & Connect</button>);
-            } else {
-                color = "#2cbe4e";
-                Buttons.push(<button id="btnConnect" className="btn btn-default btn-primary">Update</button>);
-            }
-            Buttons.push(<button id="btnDelete" className="btn btn-default btn-danger" onClick={$this.onDelete}>X</button>);
-        }
-
-        let groupId = "connection_" + i;
-        return (
-            <form id="formConnection" className="form-inline" onSubmit={this.onSubmit} action="/connections">
-                <div className="form-group" id={groupId}>
-                    <label className="octicon octicon-radio-tower" style={{color: color}}></label>
-                    <input id="txtHost" name="host" type="text" className="form-control" placeholder="127.0.0.1" spellCheck="false" onChange={$this.onChange} onFocus={$this.selectText} value={connection ? connection.host : ""} />
-                    <label>:</label>
-                    <input id="txtPort" name="port" type="text" className="form-control" placeholder="6379" spellCheck="false" onChange={$this.onChange} onFocus={$this.selectText} value={connection ? connection.port : ""} />
-                    <label>auth</label>
-                    <input id="txtPassword" name="password" type="password" className="form-control" placeholder="password" spellCheck="false" onChange={this.onChange} onFocus={this.selectText} value={connection ? connection.password : ""} />
-                    <label>db</label>
-                    <input id="txtDb" name="db" type="text" className="form-control" placeholder="0" spellCheck="false" onChange={$this.onChange} onFocus={this.selectText} value={connection ? connection.db : ""} />
-                    {Buttons}
-                </div>
-            </form>
-        );
+        Redis.setConnection(conn)
+            .then(function (r) {
+                $this.setState({ successMessage: "Connected to " + conn.host + ":" + conn.port, connections: r.connections });
+            });
+    },
+    onUpdate: function (e, conn) {
+        e.preventDefault();
+        this.setState({ connection: conn });
     },
     render: function () {
-        var Connections = [];
-        if (this.state.connections != null && this.state.connections.length > 0) {
-            for (let i = 0; i < this.state.connections.length; i++) {
-                Connections.push(this.renderConnection(i));
-            }
-        }
-        Connections.push(this.renderConnection(Connections.length)); // the connection that hasn't been added to the server yet
+        const conn = this.state.connection;
+        var $this = this;
 
-        //<form id="formConnection" className="form-inline" onSubmit={this.onSubmit} action="/connections">
-        //    <p className="actions">
-        //        <img className="loader" src="/img/ajax-loader.gif" />
-        //        <button id="btnConnect" className="btn btn-default btn-primary">Update Connections</button>
-        //    </p>
-        //</form>
+        var ExistingConnections = {};
+        if (this.state.connections !== null) {
+            ExistingConnections = (
+                    <table className="table table-striped wrap">
+                        <thead>
+                            <tr>
+                                <td></td>
+                                <td>Host</td>
+                                <td>Port</td>
+                                <td>Db</td>
+                                <td>Role</td>
+                                <td>Actions</td>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {this.state.connections.map(function (conn) {
+                            var Status = null;
+                            var Buttons = [];
+                            const onUpdate = (e) => {
+                                $this.onUpdate(e, conn);
+                            };
+                            Buttons.push(<button className="btn btn-default btn-primary octicon octicon-gear" onClick={onUpdate}></button>);
+                            if (conn != ($this.state.connection || ConnectionStore.activeConnection)) {
+                                Status = <label className="octicon octicon-radio-tower"></label>;
+                                const onConnect = (e) => {
+                                    $this.onConnect(e, conn);
+                                };
+                                Buttons.push(<button className="btn btn-default btn-success octicon octicon-radio-tower" onClick={onConnect}></button>);
+                            } else {
+                                Status = <label className="octicon octicon-radio-tower" style={{ color: "#2cbe4e" }}></label>;
+                            }
+                            return (
+                                    <tr key={conn.host + ":" + conn.port}>
+                                        <td>{Status}</td>
+                                        <td>{conn.host}</td>
+                                        <td>{conn.port}</td>
+                                        <td>{conn.db}</td>
+                                        <td>{conn.isMaster ? "master" : ""}</td>
+                                        <td className="actions">{Buttons}</td>
+                                    </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            );
+        }
 
         return (
           <div id="connections-page">
             <div className="content">
-                <h2>Redis Connections</h2>
-                {Connections}
-                <p className="bg-success">{this.state.successMessage}</p>
-                <p className="bg-danger error-summary"></p>
+                <h2>Redis Connections</h2>{ExistingConnections}
+                <form id="formConnection" className="form-inline" onSubmit={this.onSubmit} action="/connection">
+                    <div className="form-group">
+                        <label className="octicon octicon-radio-tower"></label>
+                        <input ref="txtHost" id="txtHost" name="host" type="text" className="form-control" placeholder="127.0.0.1" spellCheck="false"
+                               onChange={this.onChange} onFocus={this.selectText}
+                               value={conn ? conn.host : ""} />
+                        <label>:</label>
+                        <input id="txtPort" name="port" type="text" className="form-control" placeholder="6379" spellCheck="false"
+                               onChange={this.onChange} onFocus={this.selectText}
+                               value={conn ? conn.port : ""} />
+                        <label>db</label>
+                        <input id="txtDb" name="db" type="text" className="form-control" placeholder="0" spellCheck="false"
+                               onChange={this.onChange} onFocus={this.selectText}
+                               value={conn ? conn.db : ""} />
+                        <label>auth</label>
+                        <input id="txtPassword" name="password" type="password" className="form-control" placeholder="password" spellCheck="false"
+                               onChange={this.onChange} onFocus={this.selectText}
+                               value={conn ? conn.password : ""} />
+                    </div>
+                    <p className="actions">
+                        <img className="loader" src="/img/ajax-loader.gif" />
+                        <button id="btnSave" className="btn btn-default btn-primary">{conn != null ? "Save" : "Add"}</button>
+                        <button id="btnCancel" className="btn btn-default" onClick={this.onClear}>Cancel</button>
+                    </p>
+                    <p className="bg-success">{this.state.successMessage}</p>
+                    <p className="bg-danger error-summary"></p>
+                </form>
             </div>
           </div>
         );

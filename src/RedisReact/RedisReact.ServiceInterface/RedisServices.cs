@@ -195,17 +195,32 @@ return cjson.encode(cursorAttrs)";
         public object Post(ChangeConnection request)
         {
             var connection = ApplyDefaults(request);
-            var settings = SharedUtils.GetAppSettings();
-            var password = Redis.Password;
 
-            var connString = GetConnectionString(connection);
-
-            var testConnection = new RedisClient(connString);
-            testConnection.Ping();
-
-            ((IRedisFailover)TryResolve<IRedisClientsManager>()).FailoverTo(connString);
+            string connString;
+            if (TryConnect(connection, false, false, out connString) ||
+                TryConnect(connection, true, false, out connString) ||
+                TryConnect(connection, true, true, out connString) ||
+                TryConnect(connection, false, true, out connString)) {
+                ((IRedisFailover)TryResolve<IRedisClientsManager>()).FailoverTo(connString);
+            }
 
             return Get(new GetConnections());
+        }
+
+        private bool TryConnect(ChangeConnection connection, bool ssl, bool password, out string connString)
+        {
+            connString = GetConnectionString(connection, password ? Redis.Password : null);
+            if (ssl) {
+                connString += "&ssl=true";
+            }
+
+            try {
+                var testConnection = new RedisClient(connString);
+                testConnection.Ping();
+                return true;
+            } catch {
+                return false;
+            }
         }
 
         public object Any(GetRedisClientStats request)

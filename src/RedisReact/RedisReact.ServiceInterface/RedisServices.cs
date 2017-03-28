@@ -105,11 +105,11 @@ return cjson.encode(cursorAttrs)";
 
             switch (role) {
                 case RedisServerRole.Master:
-                    connections.AddRange(GetSlaves());
+                    connections.AddRange(GetSlaves(Redis));
                     break;
 
                 case RedisServerRole.Slave:
-                    connections.AddRange(GetMaster());
+                    connections.AddRange(SharedUtils.GetMaster(Redis));
                     break;
             }
 
@@ -118,34 +118,16 @@ return cjson.encode(cursorAttrs)";
             };
         }
 
-        private IEnumerable<Connection> GetMaster()
-        {
-            string host, masterPort = null;
-            if (Redis.Info.TryGetValue("master_host", out host) &&
-                Redis.Info.TryGetValue("master_port", out masterPort)) {
-                var master = new Connection {
-                    Host = host,
-                    Db = (int) Redis.Db,
-                    IsMaster = true
-                };
-                int port;
-                if (int.TryParse(masterPort, out port)) {
-                    master.Port = port;
-                }
-                yield return master;
-            }
-        }
-
-        private IEnumerable<Connection> GetSlaves()
+        private static IEnumerable<Connection> GetSlaves(IRedisClient client)
         {
             string connectedSlaves;
-            if (Redis.Info.TryGetValue("connected_slaves", out connectedSlaves)) {
+            if (client.Info.TryGetValue("connected_slaves", out connectedSlaves)) {
                 int slaves;
                 if (int.TryParse(connectedSlaves, out slaves)) {
                     for (var i = 0; i < slaves; i++) {
                         string slave, ip = null;
-                        int port = Redis.Port;
-                        if (Redis.Info.TryGetValue("slave" + i, out slave)) {
+                        int port = client.Port;
+                        if (client.Info.TryGetValue("slave" + i, out slave)) {
                             var parts = slave.Split(',');
                             foreach (var part in parts) {
                                 if (part.StartsWith("ip=")) {
@@ -158,7 +140,7 @@ return cjson.encode(cursorAttrs)";
                                 yield return 
                                     new Connection {
                                         Host = ip,
-                                        Db = (int) Redis.Db,
+                                        Db = (int)client.Db,
                                         IsMaster = false,
                                         Port = port
                                     };
@@ -169,59 +151,24 @@ return cjson.encode(cursorAttrs)";
             }
         }
 
-        private static ChangeConnection ApplyDefaults(ChangeConnection request)
-        {
-            return new ChangeConnection {
-                Host = request.Host ?? "127.0.0.1",
-                Port = request.Port.GetValueOrDefault(6379),
-                Db = request.Db.GetValueOrDefault(0),
-                Password = request.Password
-            };
-        }
-
-        private static string GetConnectionString(ChangeConnection request, string password = null)
-        {
-            var connString = "{0}:{1}?db={2}".Fmt(
-                request.Host,
-                request.Port,
-                request.Db);
-
-            if (!string.IsNullOrEmpty(password ?? request.Password))
-                connString += "&password=" + (password ?? request.Password).UrlEncode();
-
-            return connString;
-        }
-
         public object Post(ChangeConnection request)
         {
-            var connection = ApplyDefaults(request);
+            var host = request.Host ?? "127.0.0.1";
+            var port = request.Port.GetValueOrDefault(6379);
+            var db = request.Db.GetValueOrDefault(0);
+            var password = request.Password;
 
-            string connString;
-            if (TryConnect(connection, false, false, out connString) ||
-                TryConnect(connection, true, false, out connString) ||
-                TryConnect(connection, true, true, out connString) ||
-                TryConnect(connection, false, true, out connString)) {
+            var settings = SharedUtils.GetAppSettings();
+
+            var connString = SharedUtils.GetMasterConnectionString(host, port, db, password, false)
+                        ?? SharedUtils.GetMasterConnectionString(host, port, db, password, true)
+                        ?? SharedUtils.GetMasterConnectionString(host, port, db, settings.GetString("password"), true)
+                        ?? SharedUtils.GetMasterConnectionString(host, port, db, settings.GetString("password"), false);
+            if (!string.IsNullOrEmpty(connString)) {
                 ((IRedisFailover)TryResolve<IRedisClientsManager>()).FailoverTo(connString);
             }
 
             return Get(new GetConnections());
-        }
-
-        private bool TryConnect(ChangeConnection connection, bool ssl, bool password, out string connString)
-        {
-            var settings = SharedUtils.GetAppSettings();
-            connString = GetConnectionString(connection, password ? settings.GetString("password") : null);
-            if (ssl) {
-                connString += "&ssl=true";
-            }
-
-            try {
-                var testConnection = new RedisClient(connString);
-                testConnection.Ping();
-                return true;
-            } catch {
-                return false;
-            }
         }
 
         public object Any(GetRedisClientStats request)

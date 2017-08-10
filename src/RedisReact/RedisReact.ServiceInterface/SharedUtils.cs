@@ -47,7 +47,7 @@ namespace RedisReact.ServiceInterface
                     var port = appHost.AppSettings.Get("redis-port", 6379);
                     var password = appHost.AppSettings.GetString("redis-password");
                     var ssl = appHost.AppSettings.Get("redis-ssl", false);
-                    return appHost.AppSettings.Get("redis-servers", "redis-server")
+                    return appHost.AppSettings.Get("redis-servers", "localhost")
                                   .Split(',') // allow for multiple redis servers to be specified
                                   .Select(host => {
                                       try {
@@ -93,7 +93,8 @@ namespace RedisReact.ServiceInterface
 
                 var master = GetMaster(testConnection).SingleOrDefault();
                 if (master != null) return GetMasterConnectionString(master.Host, master.Port, master.Db, password, ssl);
-            } catch {
+            } catch (Exception ex) {
+                Console.WriteLine(ex + " host: " + host);
             }
             return null;
         }

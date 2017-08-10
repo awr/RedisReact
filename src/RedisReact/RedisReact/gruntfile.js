@@ -262,17 +262,15 @@ module.exports = function (grunt) {
             },
             'wwwroot-bundle': function () {
                 var assets = useref.assets({ searchPath: './' });
-                var checkIfJsx = function (file) {
-                    return file.relative.indexOf('.jsx.js') !== -1;
-                };
+                var checkIf = ext => file => file.relative.indexOf(ext) !== -1;
                 return gulp.src(['./**/*.html', '!wwwroot_build/**/*', '!wwwroot/**/*', '!bower_components/**/*', '!node_modules/**/*'])
                     .pipe(assets)
-                    .pipe(gulpif('*.jsx.js', react()))
-                    .pipe(gulpif(checkIfJsx, uglify()))
-                    .pipe(gulpif('*.css', minifyCss()))
+                    .pipe(gulpif(checkIf('.jsx.js'), react()))
+                    // .pipe(gulpif(checkIf('.jsx.js'), uglify()))
+                    .pipe(gulpif(checkIf('.css'), minifyCss()))
                     .pipe(assets.restore())
                     .pipe(useref())
-                    .pipe(gulpif('*.html', header("<!-- Auto generated file on " + (new Date().toLocaleTimeString()) + " by RedisReact\\gruntfile.js -->\r\n")))
+                    .pipe(gulpif(checkIf('.html'), header("<!-- Auto generated file on " + (new Date().toLocaleTimeString()) + " by RedisReact\\gruntfile.js -->\r\n")))
                     .pipe(gulp.dest(resourcesRoot))
                     .pipe(gulp.dest(webRoot));
 

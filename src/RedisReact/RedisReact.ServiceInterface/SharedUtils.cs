@@ -49,7 +49,6 @@ namespace RedisReact.ServiceInterface
                     var ssl = appHost.AppSettings.Get("redis-ssl", false);
                     return appHost.AppSettings.Get("redis-servers", "redis-server")
                                   .Split(',') // allow for multiple redis servers to be specified
-                                  .Select(name => appHost.AppSettings.Get(name, "127.0.0.1"))
                                   .Select(host => {
                                       try {
                                           var connString = GetMasterConnectionString(host, port, db, password, ssl);

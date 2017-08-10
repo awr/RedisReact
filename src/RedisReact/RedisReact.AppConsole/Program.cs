@@ -2,6 +2,7 @@
 using ServiceStack.Text;
 using System;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 
 namespace RedisReact.AppConsole
@@ -18,7 +19,9 @@ namespace RedisReact.AppConsole
         {
             new AppHost().Init().Start("http://*:2337/");
             "ServiceStack SelfHost listening at {0}".Fmt(HostUrl).Print();
-            Process.Start(HostUrl);
+            if (args == null || args.All(a => a != "-q")) {
+                Process.Start(HostUrl);
+            }
 
             Thread.Sleep(Timeout.Infinite);
         }
